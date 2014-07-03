@@ -1,48 +1,49 @@
 #coding: utf-8
 import hashlib
-import web
+import tornado.web
 import time
-import os
-import music,translate,face,weather,ip,phone,todayonhistory,navigation,imei
+import music, translate, face, weather, ip, phone, todayonhistory, navigation, imei
 import re
 from xml.etree import ElementTree as etree
+import promptMsg, result as weixinResult
 
 import sys 
 reload(sys) 
 sys.setdefaultencoding('utf-8')
 
-import promptMsg
 
+class WeixinInterface(tornado.web.RequestHandler):
 
-class WeixinInterface:
-    def __init__(self):
-        self.app_root = os.path.dirname(__file__)
-        self.templates_root = os.path.join(self.app_root, 'templates')
-        self.render = web.template.render(self.templates_root)
-        
-    def GET(self):
+    def prepare(self):
+        if self.request.method == 'GET':
+            self.get()
+        elif self.request.method == 'POST':
+            self.post()
+    
+    def get(self):
         #获取输入参数
-        data = web.input()
-        signature=data.signature
-        timestamp=data.timestamp
-        nonce=data.nonce
-        echostr=data.echostr
+        signature = self.get_argument("signature")
+        timestamp = self.get_argument("timestamp")
+        nonce = self.get_argument("nonce")
+        echostr = self.get_argument("echostr")
         #自己的token
         token="juanzi" #这里改写你在微信公众平台里输入的token
         #字典序排序
-        list=[token,timestamp,nonce]
-        list.sort()
-        sha1=hashlib.sha1()
-        map(sha1.update,list)
-        hashcode=sha1.hexdigest()
+        list1 = [token,timestamp,nonce]
+        list1.sort()
+        sha1 = hashlib.sha1()
+        map(sha1.update,list1)
+        hashcode = sha1.hexdigest()
         #sha1加密算法        
  
         #如果是来自微信的请求，则回复echostr
         if hashcode == signature:
-            return echostr
+            self.finish(echostr)
+        else:
+            self.finish(None)
             
-    def POST(self):        
-        str_xml = web.data() #获得post来的数据
+    def post(self):        
+        str_xml = self.request.body #获得post来的数据
         xml = etree.fromstring(str_xml)#进行XML解析
         msgType=xml.find("MsgType").text
         fromUser=xml.find("FromUserName").text
@@ -77,7 +78,7 @@ class WeixinInterface:
                     respContent = music.Music().baiduMusic(argslist[0],argslist[1])
                 
                 if argslist[0]:
-                    return self.render.reply_music(fromUser,toUser,int(time.time()),argslist[0],des,respContent[0],respContent[1])
+                    self.finish(weixinResult.result_music(fromUser, toUser, int(time.time()), argslist[0],des,respContent[0],respContent[1]))
         
             elif content.startswith("天气"):
                 reinfo = re.compile("^天气")
@@ -86,7 +87,7 @@ class WeixinInterface:
                     respContent = promptMsg.getWeather()
                 else:
                     newsMsg = weather.Weather().baiduWeather(args, fromUser, toUser)
-                    return newsMsg
+                    self.finish(newsMsg)
         
             elif content.startswith("ip"):
                 reinfo = re.compile("^ip")
@@ -112,7 +113,7 @@ class WeixinInterface:
                 else:
                     result, code = imei.IMEI().appleIMEI(args, toUser, fromUser)
                     if code == 0:
-                        return result
+                        self.finish(result)
                     elif code == -1:
                         respContent = result
                     
@@ -126,7 +127,7 @@ class WeixinInterface:
                 end = s[2]
             
                 newsMsg = navigation.Navigation().baiduNavigation(toUser, fromUser, region, start, end)
-                return newsMsg
+                self.finish(newsMsg)
                 
             else:
                 respContent = promptMsg.getTextMsg()
@@ -154,4 +155,4 @@ class WeixinInterface:
                 eventKey = xml.find("EventKey").text
                 #TODO
         
-        return self.render.reply_text(fromUser,toUser,int(time.time()),respContent)
+        self.finish(weixinResult.result_text(fromUser, toUser, int(time.time()), respContent))

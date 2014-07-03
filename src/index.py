@@ -1,16 +1,15 @@
+#coding:utf-8
 
-import os
-import web
+import tornado.web
+import tornado.httpserver
+import tornado.ioloop
 
 from weixinInterface import WeixinInterface
 
-urls = (
-'/weixin','WeixinInterface'
-)
- 
-app_root = os.path.dirname(__file__)
-templates_root = os.path.join(app_root, 'templates')
-render = web.template.render(templates_root)
+app = tornado.web.Application([
+    (r"/weixin", WeixinInterface),
+])
 
-app = web.application(urls, globals())
-app.run()
+http_server = tornado.httpserver.HTTPServer(app)
+http_server.listen(8888)
+tornado.ioloop.IOLoop.instance().start()
